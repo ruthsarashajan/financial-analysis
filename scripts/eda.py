@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.io as pio
 import boto3
+import numpy as np
 
 # ----------- CONFIGURATION -----------
 S3_BUCKET = 'financial-analysis-project'        # <-- CHANGE THIS!
@@ -72,6 +73,29 @@ if 'amount' in df.columns:
     pio.write_html(fig5, file=plot5_path, auto_open=False)
     plot_paths.append(plot5_path)
 
+    # ----------- 3A. Automated Anomaly Detection (Z-score method) -----------
+    df['amount_zscore'] = (df['amount'] - df['amount'].mean()) / df['amount'].std()
+    df['isAnomaly'] = df['amount_zscore'].abs() > 3
+
+    # Save anomalies to a CSV (optional)
+    anomalies = df[df['isAnomaly']]
+    anomaly_path = os.path.join(LOCAL_PLOT_DIR, 'anomalies.csv')
+    anomalies.to_csv(anomaly_path, index=False)
+
+    # Visualize anomalies on a scatter plot
+    fig_anom = px.scatter(
+        df,
+        x='step' if 'step' in df.columns else df.index,
+        y='amount',
+        color='isAnomaly',
+        title='Anomaly Detection: Amount Z-score > 3',
+        labels={'color': 'Is Anomaly'}
+    )
+    fig_anom.show()
+    plot_anom_path = os.path.join(LOCAL_PLOT_DIR, 'anomaly_scatter.html')
+    pio.write_html(fig_anom, file=plot_anom_path, auto_open=False)
+    plot_paths.append(plot_anom_path)
+
 # Top 20 accounts by sent amount
 if 'nameOrig' in df.columns and 'amount' in df.columns:
     top_orig = df.groupby('nameOrig')['amount'].sum().sort_values(ascending=False).head(20).reset_index()
@@ -107,7 +131,7 @@ if 'type' in df.columns and 'isFraud' in df.columns:
     plot9_path = os.path.join(LOCAL_PLOT_DIR, 'fraud_rate_by_type.html')
     pio.write_html(fig9, file=plot9_path, auto_open=False)
     plot_paths.append(plot9_path)
-elif 'isFraud' in df.columns and type_cols:
+elif 'isFraud' in df.columns and 'type_cols' in locals():
     fraud_by_type = []
     for col in type_cols:
         fraud_rate = df.loc[df[col]==1, 'isFraud'].mean()
@@ -120,9 +144,11 @@ elif 'isFraud' in df.columns and type_cols:
     plot_paths.append(plot9_path)
 
 if 'amount' in df.columns and 'isFraud' in df.columns:
-    fig10 = px.histogram(df, x='amount', color='isFraud', nbins=100, 
-                        title='Transaction Amount Distribution: Fraud vs Non-Fraud',
-                        barmode='overlay', log_y=True)
+    fig10 = px.histogram(
+        df, x='amount', color='isFraud', nbins=100, 
+        title='Transaction Amount Distribution: Fraud vs Non-Fraud',
+        barmode='overlay', log_y=True
+    )
     fig10.show()
     plot10_path = os.path.join(LOCAL_PLOT_DIR, 'amount_dist_fraud_vs_nonfraud.html')
     pio.write_html(fig10, file=plot10_path, auto_open=False)
